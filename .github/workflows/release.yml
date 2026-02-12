@@ -49,6 +49,8 @@ jobs:
           path: polymarket-cli-${{ matrix.platform.name_suffix }}
 
   release:
+    permissions:
+      contents: write
     needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
