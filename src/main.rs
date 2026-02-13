@@ -127,8 +127,10 @@ async fn main() -> Result<()> {
         Commands::Positions { user } => {
             let user_addr = if let Some(u) = user {
                 Address::from_str(&u).context("Invalid address format")?
+            } else if let Ok(u) = env::var("USER_ADDRESS") {
+                Address::from_str(&u).context("Invalid address format in USER_ADDRESS")?
             } else {
-                let private_key = env::var(PRIVATE_KEY_VAR).context("PRIVATE_KEY env var not set")?;
+                let private_key = env::var(PRIVATE_KEY_VAR).context("PRIVATE_KEY or USER_ADDRESS env var not set")?;
                 let signer = LocalSigner::from_str(&private_key).context("Invalid private key")?;
                 signer.address()
             };
