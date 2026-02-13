@@ -1,21 +1,16 @@
 use clap::{Parser, Subcommand};
 use dotenv::dotenv;
 use polymarket_client_sdk::{
-    clob::{
+    POLYGON, PRIVATE_KEY_VAR, auth::{LocalSigner, Signer}, clob::{
         Client as ClobClient, Config as ClobConfig,
-        types::{Amount, OrderType, Side, request::{OrderBookSummaryRequest, MidpointRequest, SpreadRequest}},
-    },
-    data::{
+        types::{Amount, OrderType, Side, SignatureType, request::{MidpointRequest, OrderBookSummaryRequest, SpreadRequest}},
+    }, contract_config, data::{
         Client as DataClient,
         types::{MarketFilter, request::{PositionsRequest, TradesRequest}},
-    },
-    gamma::{
+    }, gamma::{
         Client as GammaClient,
         types::request::SearchRequest,
-    },
-    types::{Decimal, Address, address},
-    auth::{LocalSigner, Signer},
-    POLYGON, PRIVATE_KEY_VAR, contract_config,
+    }, types::{Address, Decimal, address}
 };
 use alloy::primitives::U256;
 use alloy::providers::ProviderBuilder;
@@ -254,7 +249,7 @@ async fn main() -> Result<()> {
             
             let client = ClobClient::new("https://clob.polymarket.com", ClobConfig::default())?
                 .authentication_builder(&signer)
-                // .signature_type(SignatureType::GnosisSafe)  // Funder auto-derived via CREATE2
+                .signature_type(SignatureType::Proxy)
                 .authenticate()
                 .await
                 .context("Failed to authenticate")?;
