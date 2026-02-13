@@ -3,7 +3,7 @@ use dotenv::dotenv;
 use polymarket_client_sdk::{
     clob::{
         Client as ClobClient, Config as ClobConfig,
-        types::{Amount, OrderType, Side, request::{OrderBookSummaryRequest, MidpointRequest, SpreadRequest}},
+        types::{Amount, OrderType, Side, SignatureType, request::{OrderBookSummaryRequest, MidpointRequest, SpreadRequest}},
     },
     data::{
         Client as DataClient,
@@ -212,12 +212,27 @@ async fn main() -> Result<()> {
         Commands::Order { token_id, side, amount, price } => {
             let private_key = env::var(PRIVATE_KEY_VAR).context("Need PRIVATE_KEY environment variable")?;
             let signer = LocalSigner::from_str(&private_key)?.with_chain_id(Some(POLYGON));
+
+            use polymarket_client_sdk::{derive_safe_wallet, derive_proxy_wallet, POLYGON};
+
+            let safe_address = derive_safe_wallet(signer.address(), POLYGON);
+            let proxy_address = derive_proxy_wallet(signer.address(), POLYGON);
+
+            println!("Safe Address: {:?}", safe_address);
+            println!("Proxy Address: {:?}", proxy_address);
             
             let client = ClobClient::new("https://clob.polymarket.com", ClobConfig::default())?
                 .authentication_builder(&signer)
+                // .signature_type(SignatureType::GnosisSafe)  // Funder auto-derived via CREATE2
                 .authenticate()
                 .await
                 .context("Failed to authenticate")?;
+
+            let ok = client.ok().await?;
+            println!("Ok: {ok}");
+
+            let api_keys = client.api_keys().await?;
+            println!("API keys: {api_keys:?}");
 
             let side_enum = match side.to_lowercase().as_str() {
                 "buy" => Side::Buy,
