@@ -3,7 +3,7 @@ use dotenv::dotenv;
 use polymarket_client_sdk::{
     clob::{
         Client as ClobClient, Config as ClobConfig,
-        types::{Amount, OrderType, Side, SignatureType, request::{OrderBookSummaryRequest, MidpointRequest, SpreadRequest}},
+        types::{Amount, OrderType, Side, request::{OrderBookSummaryRequest, MidpointRequest, SpreadRequest}},
     },
     data::{
         Client as DataClient,
@@ -13,12 +13,37 @@ use polymarket_client_sdk::{
         Client as GammaClient,
         types::request::SearchRequest,
     },
-    types::{Decimal, Address},
+    types::{Decimal, Address, address},
     auth::{LocalSigner, Signer},
-    POLYGON, PRIVATE_KEY_VAR,
+    POLYGON, PRIVATE_KEY_VAR, contract_config,
 };
+use alloy::primitives::U256;
+use alloy::providers::ProviderBuilder;
+// use alloy::signers::Signer as _; // Removed unused import
+use alloy::sol;
+
+const RPC_URL: &str = "https://polygon-rpc.com";
+
+const USDC_ADDRESS: Address = address!("0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174");
+const TOKEN_TO_APPROVE: Address = USDC_ADDRESS;
+
+sol! {
+    #[sol(rpc)]
+    interface IERC20 {
+        function approve(address spender, uint256 value) external returns (bool);
+        function allowance(address owner, address spender) external view returns (uint256);
+    }
+
+    #[sol(rpc)]
+    interface IERC1155 {
+        function setApprovalForAll(address operator, bool approved) external;
+        function isApprovedForAll(address account, address operator) external view returns (bool);
+    }
+}
 use std::str::FromStr;
 use std::env;
+use std::time::Duration;
+use tokio::time::sleep;
 use anyhow::{Context, Result};
 
 #[derive(Parser)]
@@ -77,6 +102,12 @@ enum Commands {
         /// Price for limit order. If omitted, places a Market Order (FOK).
         #[arg(short, long)]
         price: Option<String>,
+    },
+    /// Approve tokens for trading
+    Approve {
+        /// Dry run mode (don't execute transactions)
+        #[arg(long, default_value_t = false)]
+        dry_run: bool,
     },
 }
 
@@ -282,7 +313,139 @@ async fn main() -> Result<()> {
                 println!("Market Order Response: {:?}", response);
             }
         }
+        Commands::Approve { dry_run } => {
+            let chain = POLYGON;
+            let config = contract_config(chain, false).unwrap();
+            let neg_risk_config = contract_config(chain, true).unwrap();
+
+            // Collect all contracts that need approval
+            let mut targets: Vec<(&str, Address)> = vec![
+                ("CTF Exchange", config.exchange),
+                ("Neg Risk CTF Exchange", neg_risk_config.exchange),
+            ];
+
+            // Add the Neg Risk Adapter if available
+            if let Some(adapter) = neg_risk_config.neg_risk_adapter {
+                targets.push(("Neg Risk Adapter", adapter));
+            }
+
+            if dry_run {
+                println!("mode = \"dry_run\", showing approvals without executing");
+                for (name, target) in &targets {
+                    println!("contract = {}, address = {}, would receive approval", name, target);
+                }
+                println!("total = {}, contracts would be approved", targets.len());
+                return Ok(());
+            }
+
+            let private_key = env::var(PRIVATE_KEY_VAR).context("Need PRIVATE_KEY environment variable")?;
+            let signer = LocalSigner::from_str(&private_key)?.with_chain_id(Some(chain));
+
+            let provider = ProviderBuilder::new()
+                .wallet(signer.clone())
+                .connect(RPC_URL)
+                .await?;
+
+            let owner = signer.address();
+            println!("wallet loaded: {}", owner);
+
+            let token = IERC20::new(TOKEN_TO_APPROVE, provider.clone());
+            let ctf = IERC1155::new(config.conditional_tokens, provider.clone());
+
+            println!("phase = \"checking\", querying current allowances");
+
+            for (name, target) in &targets {
+                match check_allowance(&token, owner, *target).await {
+                    Ok(allowance) => println!("contract = {}, usdc_allowance = {}", name, allowance),
+                    Err(e) => eprintln!("contract = {}, error = {:?}, failed to check USDC allowance", name, e),
+                }
+
+                match check_approval_for_all(&ctf, owner, *target).await {
+                    Ok(approved) => println!("contract = {}, ctf_approved = {}", name, approved),
+                    Err(e) => eprintln!("contract = {}, error = {:?}, failed to check CTF approval", name, e),
+                }
+            }
+
+            println!("phase = \"approving\", setting approvals");
+
+            for (name, target) in &targets {
+                println!("contract = {}, address = {}, approving", name, target);
+
+                println!("Waiting 10s...");
+                sleep(Duration::from_secs(10)).await;
+
+                match approve(&token, *target, U256::MAX).await {
+                    Ok(tx_hash) => println!("contract = {}, tx = {}, USDC approved", name, tx_hash),
+                    Err(e) => eprintln!("contract = {}, error = {:?}, USDC approve failed", name, e),
+                }
+
+                println!("Waiting 10s...");
+                sleep(Duration::from_secs(10)).await;
+
+                match set_approval_for_all(&ctf, *target, true).await {
+                    Ok(tx_hash) => println!("contract = {}, tx = {}, CTF approved", name, tx_hash),
+                    Err(e) => eprintln!("contract = {}, error = {:?}, CTF setApprovalForAll failed", name, e),
+                }
+            }
+
+            println!("phase = \"verifying\", confirming approvals");
+
+            for (name, target) in &targets {
+                match check_allowance(&token, owner, *target).await {
+                    Ok(allowance) => println!("contract = {}, usdc_allowance = {}, verified", name, allowance),
+                    Err(e) => eprintln!("contract = {}, error = {:?}, verification failed", name, e),
+                }
+
+                match check_approval_for_all(&ctf, owner, *target).await {
+                    Ok(approved) => println!("contract = {}, ctf_approved = {}, verified", name, approved),
+                    Err(e) => eprintln!("contract = {}, error = {:?}, verification failed", name, e),
+                }
+            }
+
+            println!("all approvals complete");
+        }
     }
 
     Ok(())
+}
+
+async fn check_allowance<P: alloy::providers::Provider>(
+    token: &IERC20::IERC20Instance<P>,
+    owner: Address,
+    spender: Address,
+) -> anyhow::Result<U256> {
+    let allowance = token.allowance(owner, spender).call().await?;
+    Ok(allowance)
+}
+
+async fn check_approval_for_all<P: alloy::providers::Provider>(
+    ctf: &IERC1155::IERC1155Instance<P>,
+    account: Address,
+    operator: Address,
+) -> anyhow::Result<bool> {
+    let approved = ctf.isApprovedForAll(account, operator).call().await?;
+    Ok(approved)
+}
+
+async fn approve<P: alloy::providers::Provider>(
+    usdc: &IERC20::IERC20Instance<P>,
+    spender: Address,
+    amount: U256,
+) -> anyhow::Result<alloy::primitives::FixedBytes<32>> {
+    let tx_hash = usdc.approve(spender, amount).send().await?.watch().await?;
+    Ok(tx_hash)
+}
+
+async fn set_approval_for_all<P: alloy::providers::Provider>(
+    ctf: &IERC1155::IERC1155Instance<P>,
+    operator: Address,
+    approved: bool,
+) -> anyhow::Result<alloy::primitives::FixedBytes<32>> {
+    let tx_hash = ctf
+        .setApprovalForAll(operator, approved)
+        .send()
+        .await?
+        .watch()
+        .await?;
+    Ok(tx_hash)
 }
