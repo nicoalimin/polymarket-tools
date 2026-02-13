@@ -1,42 +1,3 @@
-# Polymarket CLI
-
-A command-line interface for interacting with Polymarket, built with Rust.
-
-## User Guide: VM & OpenClaw Setup
-
-Follow these steps to set up the Polymarket CLI on a Virtual Machine with OpenClaw.
-
-### 1. Get a VM
-
-Provision a Linux Virtual Machine (e.g., Ubuntu) from your preferred provider (AWS, GCP, DigitalOcean, etc.).
-
-### 2. Install OpenClaw
-
-SSH into your VM and install OpenClaw using the onboard command:
-
-```bash
-openclaw onboard
-```
-
-Follow the prompts to complete the setup.
-
-### 3. Download the CLI Binary
-
-Download the latest release of the Polymarket CLI for Linux.
-Run the following command (ensure you use the correct version, e.g., v0.3.0):
-
-```bash
-curl -L -o polymarket-cli https://github.com/nicoalimin/polymarket-tools/releases/download/v0.3.0/polymarket-cli-linux-amd64
-chmod +x polymarket-cli
-```
-
-### 4. Configure OpenClaw Tools
-
-Add the Polymarket CLI to your OpenClaw tools. Use the contents of the **AI Instructions** below as the tool description/documentation. This tells the AI how to use the CLI.
-
-<details>
-<summary><b>Tool Documentation (AI_README)</b></summary>
-
 # Polymarket CLI for AI Agents
 
 This document outlines the usage of the Polymarket CLI tool, designed for AI agents to interact with Polymarket data and execute trades.
@@ -208,7 +169,38 @@ Place a trade order. **REQUIRES `POLYMARKET_PRIVATE_KEY` ENV VAR.**
 2.  **Analysis**: Agent runs `order-book` or `midpoint` on interesting Token IDs to check pricing.
 3.  **Context**: Agent runs `positions` to check current inventory/exposure.
 4.  **Action**: Agent runs `order` to execute a decision based on analysis and context.
-</details>
+
+## User Guide: VM & OpenClaw Setup
+
+Follow these steps to set up the Polymarket CLI on a Virtual Machine with OpenClaw.
+
+### 1. Get a VM
+
+Provision a Linux Virtual Machine (e.g., Ubuntu) from your preferred provider (AWS, GCP, DigitalOcean, etc.).
+
+### 2. Install OpenClaw
+
+SSH into your VM and install OpenClaw using the onboard command:
+
+```bash
+openclaw onboard
+```
+
+Follow the prompts to complete the setup.
+
+### 3. Download the CLI Binary
+
+Download the latest release of the Polymarket CLI for Linux.
+Run the following command (ensure you use the correct version, e.g., v0.3.0):
+
+```bash
+curl -L -o polymarket-cli https://github.com/nicoalimin/polymarket-tools/releases/download/v0.3.0/polymarket-cli-linux-amd64
+chmod +x polymarket-cli
+```
+
+### 4. Configure OpenClaw Tools
+
+Add the Polymarket CLI to your OpenClaw tools. Use the contents of the **AI Instructions** below as the tool description/documentation. This tells the AI how to use the CLI.
 
 ### 5. Create .env File
 
