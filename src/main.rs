@@ -24,8 +24,8 @@ use alloy::sol;
 
 const RPC_URL: &str = "https://polygon-rpc.com";
 
-const USDC_ADDRESS: Address = address!("0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174");
-const TOKEN_TO_APPROVE: Address = USDC_ADDRESS;
+const USDC_E_ADDRESS: Address = address!("0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174");
+const USDC_NATIVE_ADDRESS: Address = address!("0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359");
 
 sol! {
     #[sol(rpc)]
@@ -349,15 +349,22 @@ async fn main() -> Result<()> {
             let owner = signer.address();
             println!("wallet loaded: {}", owner);
 
-            let token = IERC20::new(TOKEN_TO_APPROVE, provider.clone());
             let ctf = IERC1155::new(config.conditional_tokens, provider.clone());
 
             println!("phase = \"checking\", querying current allowances");
 
             for (name, target) in &targets {
-                match check_allowance(&token, owner, *target).await {
-                    Ok(allowance) => println!("contract = {}, usdc_allowance = {}", name, allowance),
-                    Err(e) => eprintln!("contract = {}, error = {:?}, failed to check USDC allowance", name, e),
+                // Check allowances for both tokens
+                let tokens = [
+                    ("USDC.e", IERC20::new(USDC_E_ADDRESS, provider.clone())),
+                    ("USDC (Native)", IERC20::new(USDC_NATIVE_ADDRESS, provider.clone())),
+                ];
+
+                for (token_name, token_contract) in &tokens {
+                     match check_allowance(token_contract, owner, *target).await {
+                        Ok(allowance) => println!("contract = {}, token = {}, allowance = {}", name, token_name, allowance),
+                        Err(e) => eprintln!("contract = {}, token = {}, error = {:?}, failed to check allowance", name, token_name, e),
+                    }
                 }
 
                 match check_approval_for_all(&ctf, owner, *target).await {
@@ -374,9 +381,19 @@ async fn main() -> Result<()> {
                 println!("Waiting 10s...");
                 sleep(Duration::from_secs(10)).await;
 
-                match approve(&token, *target, U256::MAX).await {
-                    Ok(tx_hash) => println!("contract = {}, tx = {}, USDC approved", name, tx_hash),
-                    Err(e) => eprintln!("contract = {}, error = {:?}, USDC approve failed", name, e),
+                // Approve both USDC versions
+                let tokens = [
+                    ("USDC.e", IERC20::new(USDC_E_ADDRESS, provider.clone())),
+                    ("USDC (Native)", IERC20::new(USDC_NATIVE_ADDRESS, provider.clone())),
+                ];
+
+                for (token_name, token_contract) in &tokens {
+                    match approve(token_contract, *target, U256::MAX).await {
+                        Ok(tx_hash) => println!("contract = {}, token = {}, tx = {}, approved", name, token_name, tx_hash),
+                        Err(e) => eprintln!("contract = {}, token = {}, error = {:?}, approve failed", name, token_name, e),
+                    }
+                    println!("Waiting 10s...");
+                    sleep(Duration::from_secs(10)).await;
                 }
 
                 println!("Waiting 10s...");
@@ -391,9 +408,16 @@ async fn main() -> Result<()> {
             println!("phase = \"verifying\", confirming approvals");
 
             for (name, target) in &targets {
-                match check_allowance(&token, owner, *target).await {
-                    Ok(allowance) => println!("contract = {}, usdc_allowance = {}, verified", name, allowance),
-                    Err(e) => eprintln!("contract = {}, error = {:?}, verification failed", name, e),
+                let tokens = [
+                    ("USDC.e", IERC20::new(USDC_E_ADDRESS, provider.clone())),
+                    ("USDC (Native)", IERC20::new(USDC_NATIVE_ADDRESS, provider.clone())),
+                ];
+                
+                for (token_name, token_contract) in &tokens {
+                    match check_allowance(token_contract, owner, *target).await {
+                        Ok(allowance) => println!("contract = {}, token = {}, allowance = {}, verified", name, token_name, allowance),
+                        Err(e) => eprintln!("contract = {}, token = {}, error = {:?}, verification failed", name, token_name, e),
+                    }
                 }
 
                 match check_approval_for_all(&ctf, owner, *target).await {
