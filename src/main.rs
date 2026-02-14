@@ -269,15 +269,27 @@ async fn main() -> Result<()> {
             let amount_dec = Decimal::from_str(&amount).context("Invalid amount")?;
 
             if let Some(p) = price {
-                // Limit Order inputs converted to Market Order (FOK) with calculated USDC value
+                // Limit Order inputs converted to Market Order (FOK)
                 let price_dec = Decimal::from_str(&p).context("Invalid price")?;
-                let usdc_value = amount_dec * price_dec;
-                println!("Placing MARKET {:?} order (derived from limit params): {} USDC value", side_enum, usdc_value);
+                
+                let order_amount = match side_enum {
+                    Side::Buy => {
+                        let usdc_value = amount_dec * price_dec;
+                        println!("Placing MARKET Buy order (derived from limit params): {} USDC value", usdc_value);
+                        Amount::usdc(usdc_value).context("Invalid USDC amount")?
+                    }
+                    Side::Sell => {
+                        let rounded_amount = amount_dec.round_dp(2);
+                        println!("Placing MARKET Sell order: {} Shares (from {})", rounded_amount, amount_dec);
+                        Amount::shares(rounded_amount).context("Invalid Share amount")?
+                    },
+                    _ => unreachable!("Side derived from buy/sell string"),
+                };
 
                 let order = client
                     .market_order()
                     .token_id(token_id)
-                    .amount(Amount::usdc(usdc_value).context("Invalid USDC amount")?)
+                    .amount(order_amount)
                     .side(side_enum)
                     .order_type(OrderType::FOK)
                     .build()
@@ -290,9 +302,18 @@ async fn main() -> Result<()> {
 
             } else {
                 // Market Order
-                println!("Placing MARKET {:?} order: {} (USDC value approx)", side_enum, amount_dec);
-                 
-                 let order_amount = Amount::usdc(amount_dec)?;
+                let order_amount = match side_enum {
+                    Side::Buy => {
+                        println!("Placing MARKET Buy order: {} USDC", amount_dec);
+                        Amount::usdc(amount_dec).context("Invalid USDC amount")?
+                    }
+                    Side::Sell => {
+                        let rounded_amount = amount_dec.round_dp(2);
+                        println!("Placing MARKET Sell order: {} Shares (from {})", rounded_amount, amount_dec);
+                        Amount::shares(rounded_amount).context("Invalid Share amount")?
+                    },
+                    _ => unreachable!("Side derived from buy/sell string"),
+                };
 
                 let order = client
                     .market_order()
