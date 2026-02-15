@@ -27,6 +27,7 @@ sol! {
     interface IERC20 {
         function approve(address spender, uint256 value) external returns (bool);
         function allowance(address owner, address spender) external view returns (uint256);
+        function balanceOf(address account) external view returns (uint256);
     }
 
     #[sol(rpc)]
@@ -104,6 +105,8 @@ enum Commands {
         #[arg(long, default_value_t = false)]
         dry_run: bool,
     },
+    /// Check current status (available cash)
+    Status,
 }
 
 #[tokio::main]
@@ -332,6 +335,34 @@ async fn main() -> Result<()> {
                 println!("Market Order Response: {:?}", response);
             }
         }
+        Commands::Status => {
+            let private_key = env::var(PRIVATE_KEY_VAR).context("Need PRIVATE_KEY environment variable")?;
+            let signer = LocalSigner::from_str(&private_key)?.with_chain_id(Some(POLYGON));
+            let owner = signer.address();
+            println!("User Address: {}", owner);
+
+            use polymarket_client_sdk::derive_proxy_wallet;
+            let proxy_address = derive_proxy_wallet(owner, POLYGON).context("Failed to derive proxy wallet")?;
+            println!("Proxy Address: {}", proxy_address);
+
+            let provider = ProviderBuilder::new()
+                .wallet(signer.clone())
+                .connect(RPC_URL)
+                .await?;
+
+            let tokens = [
+                ("USDC.e", IERC20::new(USDC_E_ADDRESS, provider.clone())),
+                ("USDC (Native)", IERC20::new(USDC_NATIVE_ADDRESS, provider.clone())),
+            ];
+
+            for (name, token) in &tokens {
+                let balance = check_balance(token, proxy_address).await?;
+                // USDC has 6 decimals.
+                let balance_dec = Decimal::from_str(&balance.to_string()).unwrap_or_default();
+                let balance_fmt = balance_dec / Decimal::from(1_000_000);
+                println!("{}: ${:?}", name, balance_fmt);
+            }
+        }
         Commands::Approve { dry_run } => {
             let chain = POLYGON;
             let config = contract_config(chain, false).unwrap();
@@ -459,6 +490,14 @@ async fn check_allowance<P: alloy::providers::Provider>(
 ) -> anyhow::Result<U256> {
     let allowance = token.allowance(owner, spender).call().await?;
     Ok(allowance)
+}
+
+async fn check_balance<P: alloy::providers::Provider>(
+    token: &IERC20::IERC20Instance<P>,
+    account: Address,
+) -> anyhow::Result<U256> {
+    let balance = token.balanceOf(account).call().await?;
+    Ok(balance)
 }
 
 async fn check_approval_for_all<P: alloy::providers::Provider>(

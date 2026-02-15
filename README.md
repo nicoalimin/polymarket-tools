@@ -11,6 +11,7 @@ The tool is a Rust-based CLI that provides access to:
 - Order Books
 - Recent Trades
 - Market Order Execution
+- Account Status/Balance
 
 ## Usage
 
@@ -152,9 +153,28 @@ Place a trade order. **REQUIRES `POLYMARKET_PRIVATE_KEY` ENV VAR.**
   cargo run -- order --token-id 213... --side buy --amount 10
   ```
 - **Sample Output**:
+
   ```text
   Placing LIMIT Buy order: 10 tokens @ 0.55
   Limit Order Response: OrderResponse { ... }
+  ```
+
+### 7. `status`
+
+Check current account status, including the Proxy Wallet address and USDC balances.
+
+- **Syntax**: `status`
+- **Output**: User Address, Proxy Address, USDC.e Balance, and USDC (Native) Balance.
+- **Example**:
+  ```bash
+  cargo run -- status
+  ```
+- **Sample Output**:
+  ```text
+  User Address: 0x123...
+  Proxy Address: 0xabc...
+  USDC.e: $100.50
+  USDC (Native): $10.00
   ```
 
 ## Error Handling
