@@ -274,12 +274,13 @@ async fn main() -> Result<()> {
                 
                 let order_amount = match side_enum {
                     Side::Buy => {
-                        let usdc_value = amount_dec * price_dec;
-                        println!("Placing MARKET Buy order (derived from limit params): {} USDC value", usdc_value);
+                        let rounded_amount = amount_dec.round_dp_with_strategy(2, rust_decimal::RoundingStrategy::ToZero);
+                        let usdc_value = rounded_amount * price_dec;
+                        println!("Placing MARKET Buy order (derived from limit params): {} USDC value (from {} shares)", usdc_value, rounded_amount);
                         Amount::usdc(usdc_value).context("Invalid USDC amount")?
                     }
                     Side::Sell => {
-                        let rounded_amount = amount_dec.round_dp(2);
+                        let rounded_amount = amount_dec.round_dp_with_strategy(2, rust_decimal::RoundingStrategy::ToZero);
                         println!("Placing MARKET Sell order: {} Shares (from {})", rounded_amount, amount_dec);
                         Amount::shares(rounded_amount).context("Invalid Share amount")?
                     },
@@ -304,11 +305,12 @@ async fn main() -> Result<()> {
                 // Market Order
                 let order_amount = match side_enum {
                     Side::Buy => {
-                        println!("Placing MARKET Buy order: {} USDC", amount_dec);
-                        Amount::usdc(amount_dec).context("Invalid USDC amount")?
+                        let rounded_amount = amount_dec.round_dp_with_strategy(2, rust_decimal::RoundingStrategy::ToZero);
+                        println!("Placing MARKET Buy order: {} USDC (from {})", rounded_amount, amount_dec);
+                        Amount::usdc(rounded_amount).context("Invalid USDC amount")?
                     }
                     Side::Sell => {
-                        let rounded_amount = amount_dec.round_dp(2);
+                        let rounded_amount = amount_dec.round_dp_with_strategy(2, rust_decimal::RoundingStrategy::ToZero);
                         println!("Placing MARKET Sell order: {} Shares (from {})", rounded_amount, amount_dec);
                         Amount::shares(rounded_amount).context("Invalid Share amount")?
                     },
