@@ -45,6 +45,7 @@ use anyhow::{Context, Result};
 #[derive(Parser)]
 #[command(name = "polymarket-cli")]
 #[command(about = "CLI for Polymarket", long_about = None)]
+#[command(version = include_str!("../version.txt").trim_ascii())]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -107,6 +108,7 @@ enum Commands {
     },
     /// Check current status (available cash)
     Status,
+
 }
 
 #[tokio::main]
@@ -478,6 +480,7 @@ async fn main() -> Result<()> {
 
             println!("all approvals complete");
         }
+
     }
 
     Ok(())
