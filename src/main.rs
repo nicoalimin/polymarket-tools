@@ -173,6 +173,7 @@ async fn main() -> Result<()> {
             println!("Positions for {}:", user_addr);
             for pos in positions {
                 println!("- Market: {}", pos.title);
+                println!("  Token ID: {}", pos.asset);
                 println!("  Outcome: {}", pos.outcome);
                 println!("  Size: {}", pos.size);
                 println!("  Avg Price: {}", pos.avg_price);
