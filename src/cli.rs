@@ -66,4 +66,6 @@ pub enum Commands {
     },
     /// Check current status (available cash)
     Status,
+    /// Upgrade the CLI to the latest version
+    Upgrade,
 }

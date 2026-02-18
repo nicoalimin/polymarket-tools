@@ -25,5 +25,6 @@ async fn main() -> Result<()> {
         }
         Commands::Status => commands::status::execute().await,
         Commands::Approve { dry_run } => commands::approve::execute(dry_run).await,
+        Commands::Upgrade => commands::upgrade::execute().await,
     }
 }

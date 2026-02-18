@@ -6,3 +6,4 @@ pub mod midpoint;
 pub mod order;
 pub mod status;
 pub mod approve;
+pub mod upgrade;
