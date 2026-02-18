@@ -177,6 +177,24 @@ Check current account status, including the Proxy Wallet address and USDC balanc
   USDC (Native): $10.00
   ```
 
+### 8. `upgrade`
+
+Upgrade the CLI binary to the latest version available on GitHub Releases.
+
+- **Syntax**: `upgrade`
+- **Description**: Checks the version of the `./polymarket` binary (if it exists) against the latest GitHub release. If a newer version is available, or if the binary is missing, it downloads the correct binary for your OS/Architecture and replaces `./polymarket`.
+- **Example**:
+  ```bash
+  ./polymarket upgrade
+  ```
+- **Sample Output**:
+  ```text
+  Checking for updates...
+  New version available: v0.9.0 (current: 0.1.0)
+  Downloading from: https://github.com/nicoalimin/polymarket-tools/releases/download/v0.9.0/polymarket-cli-macos-arm64
+  Successfully updated ./polymarket to v0.9.0!
+  ```
+
 ## Error Handling
 
 - **Invalid Token ID**: Returns "No orderbook exists..." or similar. Check `search` output for correct IDs.
