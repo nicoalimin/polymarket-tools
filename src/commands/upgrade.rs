@@ -32,26 +32,22 @@ pub async fn execute() -> Result<()> {
     let tag_name = json["tag_name"].as_str().context("No tag_name in release")?;
     let target_version = tag_name.trim_start_matches('v');
     
-    // Check if ./polymarket exists and get its version
-    let target_binary = std::path::Path::new("polymarket");
+    // Use the current executable's path as the target binary to replace.
+    // This is more reliable than a hardcoded relative path, which can fail
+    // if the working directory differs from the binary's location.
+    let current_exe = env::current_exe().context("Failed to determine current executable path")?;
+    let target_binary = current_exe.canonicalize().unwrap_or(current_exe);
     
-    if target_binary.exists() {
-        match get_binary_version(target_binary) {
-            Ok(current_version) => {
-                if current_version == target_version {
-                    println!("Already up to date (version {})", current_version);
-                    return Ok(());
-                }
-                println!("New version available: {} (current: {})", tag_name, current_version);
-            },
-            Err(e) => {
-                println!("Could not determine version of ./polymarket: {}", e);
-                println!("Proceeding with update to {}", tag_name);
-            }
-        }
-    } else {
-        println!("Installing {} (version {})", target_binary.display(), tag_name);
+    // Get the current version from the compiled-in version string
+    // instead of spawning a subprocess (which can fail on macOS due to code signing,
+    // SIP, or the binary being the same running process).
+    let current_version = get_compiled_version();
+    
+    if current_version == target_version {
+        println!("Already up to date (version {})", current_version);
+        return Ok(());
     }
+    println!("New version available: {} (current: {})", tag_name, current_version);
 
     let assets = json["assets"].as_array().context("No assets in release")?;
     let asset = assets.iter()
@@ -71,13 +67,13 @@ pub async fn execute() -> Result<()> {
         bail!("Failed to download update: {}", download_resp.status());
     }
 
-    // Create temp file in current directory
-    let current_dir = env::current_dir().context("Failed to get current directory")?;
+    // Create temp file in the same directory as the target binary
+    let target_dir = target_binary.parent().context("Failed to get target binary directory")?;
     let mut temp_file = tempfile::Builder::new()
         .prefix(".polymarket-update")
         .suffix(".tmp")
-        .tempfile_in(&current_dir)
-        .context("Failed to create temp file in current directory")?;
+        .tempfile_in(target_dir)
+        .context("Failed to create temp file")?;
         
     // Stream download to file
     while let Some(chunk) = download_resp.chunk().await? {
@@ -89,31 +85,18 @@ pub async fn execute() -> Result<()> {
     perms.set_mode(0o755);
     temp_file.as_file().set_permissions(perms)?;
 
-    // Rename temp file to ./polymarket
+    // Rename temp file to replace the current binary
     // Using persist to atomically replace
-    match temp_file.persist(target_binary) {
-        Ok(_) => println!("Successfully updated ./polymarket to {}!", tag_name),
+    match temp_file.persist(&target_binary) {
+        Ok(_) => println!("Successfully updated {} to {}!", target_binary.display(), tag_name),
         Err(e) => bail!("Failed to replace binary: {}", e.error),
     }
     
     Ok(())
 }
 
-fn get_binary_version(path: &std::path::Path) -> Result<String> {
-    let output = std::process::Command::new(path)
-        .arg("--version")
-        .output()
-        .context("Failed to execute binary")?;
-        
-    if !output.status.success() {
-        bail!("Binary returned non-zero exit code");
-    }
-    
-    let stdout = String::from_utf8(output.stdout).context("Invalid UTF-8 in output")?;
-    // Expected output format: "polymarket-cli v0.9.0" or similar
-    // We split by whitespace and take the last part
-    let version_part = stdout.trim().split_whitespace().last()
-        .context("Empty version output")?;
-        
-    Ok(version_part.trim_start_matches('v').to_string())
+/// Get the version that was compiled into this binary from version.txt
+fn get_compiled_version() -> &'static str {
+    include_str!("../../version.txt").trim()
+        .trim_start_matches('v')
 }
